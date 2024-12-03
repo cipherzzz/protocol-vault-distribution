@@ -1,0 +1,24 @@
+{
+  "name": "product-sum-distribution",
+  "version": "1.0.0",
+  "main": "index.js",
+  "scripts": {
+    "build": "tsc",
+    "smoketest": "ts-node src/scenario/smoketest.ts"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "description": "",
+  "devDependencies": {
+    "@types/decimal.js": "^7.4.3",
+    "@types/node": "^22.9.0",
+    "@types/uuid": "^10.0.0",
+    "ts-node": "^10.9.2",
+    "typescript": "^5.6.3"
+  },
+  "dependencies": {
+    "console-table-printer": "^2.12.1",
+    "uuid": "^11.0.3"
+  }
+}
