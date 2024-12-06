@@ -1,5 +1,6 @@
 import assert from 'assert';
 import { Decimal } from 'decimal.js';
+import { SBTC_PRICE } from '../util/constants';
 import { Report } from '../util/report';
 
 const TOLERANCE = new Decimal(1e-8);
@@ -34,8 +35,7 @@ export class ProtocolVault {
     createVault(vaultId: string, debt: Decimal, collateral: Decimal) {
 
         if (this.vaults.has(vaultId)) {
-            console.log(`Vault already exists`);
-            return;
+            throw new Error(`Vault already exists`);
         }
 
         const vault: UserVault = {
@@ -75,8 +75,7 @@ export class ProtocolVault {
 
         let vault = this.vaults.get(vaultId);
         if (!vault) {
-            console.log(`Vault does not exist`);
-            return;
+            throw new Error(`Vault does not exist`);
         }
 
         // attribute any existing protocol debt to the vault and adjust balances
@@ -95,6 +94,18 @@ export class ProtocolVault {
         return rewards;
     }
 
+    calculateCurrentDebt(vaultId: string): { nativeDebt: Decimal, protocolDebt: Decimal } {
+        let vault = this.vaults.get(vaultId);
+        if (!vault) {
+            throw new Error(`Vault does not exist`);
+        }
+
+        // attribute any existing protocol debt to the vault and adjust balances
+        const vaultProtocolDebt = this.calculateCurrentProtocolBSD(vault);
+
+        return { nativeDebt: vault.debt, protocolDebt: vaultProtocolDebt };
+    }
+
 
     redistribute(bsd: Decimal, sbtc: Decimal) {
         this.sum_debt = this.sum_debt.add(bsd.div(this.aggregateVaultsBSD));
@@ -103,8 +114,34 @@ export class ProtocolVault {
 
     }
 
+    displayBalances = () => {
+        console.log(`Vaults:`);
+        this.vaults.forEach((vault) => {
+            console.log(`Vault: ${vault.id}, debt: ${vault.debt}, protocol_debt: ${vault.protocol_debt}`);
+        });
+        console.log(`Aggregate BSD: ${this.aggregateVaultsBSD}, protocolVaultBalanceBSD: ${this.protocolVaultBalanceBSD}`);
+    }
+
+    reconcileVaultBalances(tag: string) {
+        let aggregateVaultDebt = new Decimal(0);
+        let aggregateProtocolVaultDebt = new Decimal(0);
+        this.vaults.forEach((vault) => {
+
+            const calculatedVaultProtocolDebt = this.calculateCurrentProtocolBSD(vault)
+            const totalVaultDebt = vault.debt.plus(calculatedVaultProtocolDebt).plus(vault.protocol_debt);
+            const collateralRatio = vault.collateral.mul(SBTC_PRICE).div(totalVaultDebt);
+
+            aggregateProtocolVaultDebt = aggregateProtocolVaultDebt.add(calculatedVaultProtocolDebt);
+            aggregateVaultDebt = aggregateVaultDebt.plus(vault.debt);
+            this.report.addReconciliationRow({ state: tag, provider: vault.id, vault_debt: vault.debt, vault_protocol_debt: vault.protocol_debt, calculatedVaultProtocolDebt, totalVaultDebt, vaultCollateral: vault.collateral, collateralRatio });
+        });
+
+        // this.vaults.forEach((vault) => {
+        //     this.report.addReconciliationRow({ provider: vault.id, vault_debt: vault.debt, vault_protocol_debt: vault.protocol_debt, unattributed_protocol_debt: aggregateProtocolVaultDebt, protocolVaultBalanceBSD: this.protocolVaultBalanceBSD, aggregateVaultsBSD: this.aggregateVaultsBSD });
+        // });
+    }
+
     reconcile() {
-        console.log(`Reconciling vaults`);
         let aggregateVaultDebt = new Decimal(0);
         let aggregateProtocolVaultDebt = new Decimal(0);
         this.vaults.forEach((vault) => {
