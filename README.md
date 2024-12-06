@@ -1,2 +1,2 @@
-# product-sum-distribution
-A Simplified Product/Sum Efficient Rewards Distribution example in Typescript
+# protocol-vault-distribution
+A POC to explore redistribution of protocol debt to vaults in the system
