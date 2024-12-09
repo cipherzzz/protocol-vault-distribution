@@ -71,7 +71,7 @@ export class ProtocolVault {
         return vault;
     }
 
-    repayDebt(amount: Decimal, vaultId: string) {
+    repay(amount: Decimal, vaultId: string) {
 
         let vault = this.vaults.get(vaultId);
         if (!vault) {
@@ -89,21 +89,39 @@ export class ProtocolVault {
 
     }
 
-    private calculateCurrentProtocolBSD(vault: UserVault): Decimal {
-        const rewards = (vault.debt).mul(this.sum_debt.sub(vault.sum_debt_t));
-        return rewards;
-    }
+    borrow(amount: Decimal, vaultId: string) {
 
-    calculateCurrentDebt(vaultId: string): { nativeDebt: Decimal, protocolDebt: Decimal } {
         let vault = this.vaults.get(vaultId);
         if (!vault) {
             throw new Error(`Vault does not exist`);
         }
 
         // attribute any existing protocol debt to the vault and adjust balances
-        const vaultProtocolDebt = this.calculateCurrentProtocolBSD(vault);
+        vault = this.attributeProtocolVaultDebt(vault);
 
-        return { nativeDebt: vault.debt, protocolDebt: vaultProtocolDebt };
+        // update vault native debt balance and sum_t
+        this.vaults.set(vaultId, { ...vault, debt: vault.debt.plus(amount), sum_debt_t: this.sum_debt });
+
+        // increase the aggregate debt totals for native vault debt
+        this.aggregateVaultsBSD = this.aggregateVaultsBSD.plus(amount);
+
+    }
+
+    private calculateCurrentProtocolBSD(vault: UserVault): Decimal {
+        const rewards = (vault.debt).mul(this.sum_debt.sub(vault.sum_debt_t));
+        return rewards;
+    }
+
+    calculateCurrentDebt(vaultId: string): { vaultNativeDebt: Decimal, vaultProtocolDebt: Decimal, calculatedVaultProtocolDebt: Decimal, totalVaultDebt: Decimal } {
+        let vault = this.vaults.get(vaultId);
+        if (!vault) {
+            throw new Error(`Vault does not exist`);
+        }
+
+        // attribute any existing protocol debt to the vault and adjust balances
+        const calculatedVaultProtocolDebt = this.calculateCurrentProtocolBSD(vault);
+
+        return { vaultNativeDebt: vault.debt, vaultProtocolDebt: vault.protocol_debt, calculatedVaultProtocolDebt, totalVaultDebt: vault.debt.plus(calculatedVaultProtocolDebt).plus(vault.protocol_debt) };
     }
 
 
@@ -114,31 +132,12 @@ export class ProtocolVault {
 
     }
 
-    displayBalances = () => {
-        console.log(`Vaults:`);
-        this.vaults.forEach((vault) => {
-            console.log(`Vault: ${vault.id}, debt: ${vault.debt}, protocol_debt: ${vault.protocol_debt}`);
-        });
-        console.log(`Aggregate BSD: ${this.aggregateVaultsBSD}, protocolVaultBalanceBSD: ${this.protocolVaultBalanceBSD}`);
-    }
-
     reconcileVaultBalances(tag: string) {
-        let aggregateVaultDebt = new Decimal(0);
-        let aggregateProtocolVaultDebt = new Decimal(0);
         this.vaults.forEach((vault) => {
-
-            const calculatedVaultProtocolDebt = this.calculateCurrentProtocolBSD(vault)
-            const totalVaultDebt = vault.debt.plus(calculatedVaultProtocolDebt).plus(vault.protocol_debt);
+            const { vaultNativeDebt, vaultProtocolDebt, calculatedVaultProtocolDebt, totalVaultDebt } = this.calculateCurrentDebt(vault.id);
             const collateralRatio = vault.collateral.mul(SBTC_PRICE).div(totalVaultDebt);
-
-            aggregateProtocolVaultDebt = aggregateProtocolVaultDebt.add(calculatedVaultProtocolDebt);
-            aggregateVaultDebt = aggregateVaultDebt.plus(vault.debt);
-            this.report.addReconciliationRow({ state: tag, provider: vault.id, vault_debt: vault.debt, vault_protocol_debt: vault.protocol_debt, calculatedVaultProtocolDebt, totalVaultDebt, vaultCollateral: vault.collateral, collateralRatio });
+            this.report.addReconciliationRow({ state: tag, vaultId: vault.id, vault_debt: vaultNativeDebt, vault_protocol_debt: vaultProtocolDebt, calculatedVaultProtocolDebt, totalVaultDebt, vaultCollateral: vault.collateral, collateralRatio });
         });
-
-        // this.vaults.forEach((vault) => {
-        //     this.report.addReconciliationRow({ provider: vault.id, vault_debt: vault.debt, vault_protocol_debt: vault.protocol_debt, unattributed_protocol_debt: aggregateProtocolVaultDebt, protocolVaultBalanceBSD: this.protocolVaultBalanceBSD, aggregateVaultsBSD: this.aggregateVaultsBSD });
-        // });
     }
 
     reconcile() {

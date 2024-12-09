@@ -11,9 +11,9 @@ export const executeScenario = (): any => {
     stabilityPool.createVault('Bob', new Decimal(20000), new Decimal(.30));
     stabilityPool.redistribute(new Decimal(3000), new Decimal(.25))
     stabilityPool.redistribute(new Decimal(3000), new Decimal(.25))
-    // stabilityPool.redistribute(new Decimal(2000), new Decimal(.015))
-    stabilityPool.repayDebt(new Decimal(1000), 'Alice');
-    stabilityPool.repayDebt(new Decimal(2000), 'Bob');
+    stabilityPool.repay(new Decimal(1000), 'Alice');
+    stabilityPool.repay(new Decimal(2000), 'Bob');
+    stabilityPool.borrow(new Decimal(2000), 'Alice');
     stabilityPool.redistribute(new Decimal(9000), new Decimal(.25))
     stabilityPool.reconcile();
     return { report }
